@@ -1,0 +1,126 @@
+import React from 'react';
+// FIX: Import functions with errors from their specific submodules to resolve module export errors.
+import {
+  format,
+  endOfWeek,
+  eachDayOfInterval,
+  isToday,
+  isSameDay,
+  addHours,
+} from 'date-fns';
+import startOfWeek from 'date-fns/startOfWeek';
+import type { CalendarEvent } from '../types';
+import { WeekScheduleView } from './WeekScheduleView';
+
+interface WeekViewProps {
+  currentDate: Date;
+  events: CalendarEvent[];
+}
+
+export const WeekView: React.FC<WeekViewProps> = ({ currentDate, events }) => {
+  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 });
+  const days = eachDayOfInterval({ start: weekStart, end: weekEnd });
+  const hours = Array.from({ length: 24 }, (_, i) => i);
+
+  const hasAllDayEvent = events.some(e => e.allDay && days.some(d => isSameDay(e.startTime, d)));
+
+  const getEventPosition = (event: CalendarEvent) => {
+    const startHour = event.startTime.getHours() + event.startTime.getMinutes() / 60;
+    const endHour = event.endTime.getHours() + event.endTime.getMinutes() / 60;
+    // Set a minimum duration of 30 minutes (0.5 hours) for visibility
+    const duration = Math.max(0.5, endHour - startHour);
+    return {
+      top: `${startHour * 4}rem`, // 4rem per hour
+      height: `${duration * 4}rem`,
+    };
+  };
+
+  return (
+    <>
+      {/* Mobile View: A schedule-like list for the week */}
+      <div className="sm:hidden h-full">
+        <WeekScheduleView currentDate={currentDate} events={events} />
+      </div>
+      
+      {/* Desktop View: The existing time grid */}
+      <div className="hidden sm:block h-full overflow-y-auto bg-white">
+       {/* Sticky Header Container: Holds both day headers and all-day events */}
+      <div className="sticky top-0 bg-white z-10">
+        {/* Day Headers */}
+        <div className="grid grid-cols-[auto_repeat(7,1fr)] border-b border-gray-100">
+          <div className="w-14 border-r border-gray-100"></div> {/* Time column placeholder */}
+          {days.map(day => (
+            <div key={day.toString()} className="text-center py-2 border-r border-gray-100 flex flex-col items-center justify-center min-w-0">
+              <div className="text-xs font-medium text-gray-500 truncate w-full">
+                <span className="hidden sm:inline">{format(day, 'EEE')}</span>
+                <span className="sm:hidden">{format(day, 'EEEEE')}</span>
+              </div>
+              <div className={`mt-1 text-xl font-medium flex items-center justify-center w-8 h-8 ${
+                isToday(day) 
+                  ? 'bg-blue-600 text-white rounded-full' 
+                  : 'text-gray-800'
+              }`}>
+                {format(day, 'd')}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* All-day Events Section */}
+        <div className="grid grid-cols-[auto_repeat(7,1fr)] border-b border-gray-100">
+          <div className="w-14 border-r border-gray-100 flex items-center justify-center">
+            {hasAllDayEvent && (
+              <span className="text-xs font-medium text-gray-500">整日</span>
+            )}
+          </div>
+          {days.map(day => {
+              const allDayEvents = events.filter(e => e.allDay && isSameDay(e.startTime, day));
+              return (
+                  <div key={day.toString()} className="border-r border-gray-100 p-1 min-h-[2.5rem]">
+                      {allDayEvents.map(event => (
+                          <div key={event.id} className="bg-blue-500 text-white rounded px-2 py-0.5 text-xs truncate mb-1" title={event.title}>
+                              {event.title}
+                          </div>
+                      ))}
+                  </div>
+              )
+          })}
+        </div>
+      </div>
+
+
+      {/* Time Grid */}
+      <div className="grid grid-cols-[auto_repeat(7,1fr)] relative">
+        <div className="w-14 border-r border-gray-100">
+          {hours.map(hour => (
+            <div key={hour} className="h-16 text-right pr-2 text-xs text-gray-400 pt-1">
+              {hour === 0 ? '' : format(addHours(new Date(2000, 0, 1, 0), hour), 'HH:00')}
+            </div>
+          ))}
+        </div>
+        {days.map(day => (
+          <div key={day.toString()} className="relative border-r border-gray-100">
+            {hours.map(hour => (
+              <div key={hour} className="h-16 border-b border-gray-100"></div>
+            ))}
+            {events
+              .filter(event => !event.allDay && isSameDay(event.startTime, day)) // Only timed events
+              .map(event => (
+                <div
+                  key={event.id}
+                  className="absolute left-2 right-2 p-1 bg-blue-100 text-blue-800 rounded-md text-xs overflow-hidden"
+                  style={getEventPosition(event)}
+                  title={event.title}
+                >
+                  <p className="font-semibold truncate">{event.title}</p>
+                  <p className="truncate">{format(event.startTime, 'HH:mm')} - {format(event.endTime, 'HH:mm')}</p>
+                </div>
+              ))}
+          </div>
+        ))}
+      </div>
+    </div>
+    </>
+  );
+};
